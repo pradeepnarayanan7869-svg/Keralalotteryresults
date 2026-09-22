@@ -1,0 +1,9 @@
+{
+  "name": "Kerala Lottery Result Today Live",
+  "short_name": "KL Results",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06140a",
+  "theme_color": "#0a5c1e",
+  "icons": [{"src": "https://cdn-icons-png.flaticon.com/512/2583/2583344.png","sizes": "512x512","type": "image/png"}]
+}
