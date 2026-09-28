@@ -494,21 +494,19 @@ function selectYearlyYear(y){
 }
 
 function renderWeekly(){
- const data=DATA["2026"].slice().sort((a,b)=> new Date(a.date)-new Date(b.date)); // ASC for calculation
+ const data=DATA["2026"].slice().sort((a,b)=> new Date(a.date)-new Date(b.date)); // ASC
  const byDate={};
  data.forEach(d=>{ byDate[d.date]=d; });
- // FIXED: Use latest date as end, not oldest
  const latestDate = data.length>0 ? new Date(data[data.length-1].date) : new Date();
- const startDate = new Date(latestDate);
- startDate.setDate(latestDate.getDate() - 84); // 12 weeks ago
- const firstSunday = new Date(startDate);
- firstSunday.setDate(startDate.getDate() - startDate.getDay()); // Start from Sunday
+ const startOfYear = new Date(2026,0,1);
+ const firstSunday = new Date(startOfYear);
+ firstSunday.setDate(startOfYear.getDate() - startOfYear.getDay());
  const lastSaturday = new Date(latestDate);
- lastSaturday.setDate(latestDate.getDate() + (6 - latestDate.getDay()));
+ lastSaturday.setDate(latestDate.getDate() + (6 - lastSaturday.getDay()));
  let weeks=[];
  let current=new Date(firstSunday);
  let weekCount=0;
- while(current <= lastSaturday && weekCount < 20){
+ while(current <= lastSaturday && weekCount < 52){
   let week=[];
   for(let j=0;j<7;j++){
    let d=new Date(current);
@@ -523,21 +521,16 @@ function renderWeekly(){
  }
  let html='';
  weeks.forEach((week, idx)=>{
-  const hasData=week.some(day=> day.data);
-  // Show weeks that have data or are recent
-  if(!hasData && idx < weeks.length-4) {
-    // skip empty old weeks, but keep last 4 even if empty
-    if(idx < weeks.length-8) return;
-  }
-  const weekNum = idx+1;
-  html+=`<tr><td class="p-2.5 border-r bg-gradient-to-br from-gray-50 to-blue-50 font-black text-[11px]">W${weekNum}<br><span class="text-[8px] font-medium">${week[0].display}-${week[6].display}</span></td>`;
+  // Show all weeks from W1 to till now
+  html+=`<tr><td class="p-2.5 border-r bg-gradient-to-br from-gray-50 to-blue-50 font-black text-[11px]">W${idx+1}<br><span class="text-[8px] font-medium">${week[0].display}-${week[6].display}</span></td>`;
   week.forEach(day=>{
    if(day.data){
     html+=`<td class="p-2 text-center border-r bg-gradient-to-br from-emerald-50/50 to-green-50/50"><div class="text-[9px] text-gray-600 font-bold">${day.display}</div><div class="bg-gradient-to-r ${getColor(day.data.code)} text-white text-[8px] px-1.5 py-0.5 rounded-full font-black mt-1 inline-block shadow-sm">${day.data.code}</div><div class="mono text-[10px] font-black mt-1">${day.data.number_only}</div></td>`;
    } else {
     const isFuture = day.dateObj > latestDate;
-    if(isFuture){
-      html+=`<td class="p-2 text-center border-r bg-gray-50/30"><div class="text-[9px] text-gray-400 font-medium">${day.display}</div><div class="text-[8px] text-gray-300 mt-1">-</div></td>`;
+    const isBeforeYear = day.dateObj < startOfYear;
+    if(isBeforeYear || isFuture){
+      html+=`<td class="p-2 text-center border-r bg-gray-50/30"><div class="text-[9px] text-gray-300">${day.display}</div></td>`;
     } else {
       html+=`<td class="p-2 text-center border-r bg-gray-50/30"><div class="text-[9px] text-gray-400 font-medium">${day.display}</div><div class="text-[8px] text-gray-300 mt-1">No Draw</div></td>`;
     }
@@ -545,9 +538,9 @@ function renderWeekly(){
   });
   html+=`</tr>`;
  });
- // Keep W1 first, W13 last (chronological, not reversed)
- document.getElementById('weeklyBody').innerHTML=html || '<tr><td colspan="8" class="p-12 text-center text-gray-400 text-[12px]">No data for recent weeks</td></tr>';
+ document.getElementById('weeklyBody').innerHTML=html || '<tr><td colspan="8" class="p-12 text-center text-gray-400">No data</td></tr>';
 }
+
 
 
 function renderYearly(){
