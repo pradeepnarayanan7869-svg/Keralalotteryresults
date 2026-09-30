@@ -725,6 +725,374 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
 
 
 <script>
+// FINAL: Updated upto 30/09/2026 - Real results
+(function(){
+  const entries = [
+    {date:"2026-09-30", date_display:"30/09/2026", month:9, year:2026, code:"DL-71", first:"DM 925476", number_only:"925476"},
+    {date:"2026-09-29", date_display:"29/09/2026", month:9, year:2026, code:"SS-539", first:"SW 301775", number_only:"301775"},
+    {date:"2026-09-28", date_display:"28/09/2026", month:9, year:2026, code:"BT-73", first:"BB 814615", number_only:"814615"},
+    {date:"2026-09-27", date_display:"27/09/2026", month:9, year:2026, code:"SM-74", first:"MS 495441", number_only:"495441"},
+    {date:"2026-09-26", date_display:"26/09/2026", month:9, year:2026, code:"BR-111", first:"TL 360615", number_only:"360615"},
+    {date:"2026-09-25", date_display:"25/09/2026", month:9, year:2026, code:"SK-71", first:"RA 494226", number_only:"494226"}
+  ];
+  if(!DATA["2026"]) DATA["2026"]=[];
+  // Remove existing for these dates to avoid duplicates
+  DATA["2026"] = DATA["2026"].filter(x=> !["2026-09-30","2026-09-29","2026-09-28","2026-09-27","2026-09-26","2026-09-25"].includes(x.date));
+  DATA["2026"] = [...entries, ...DATA["2026"]];
+  DATA["2026"].sort((a,b)=> new Date(b.date) - new Date(a.date));
+  // Update bumper BR-111 if missing
+  try{
+    if(DATA.bumper && DATA.bumper["Thiruvonam Bumper"]){
+      if(!DATA.bumper["Thiruvonam Bumper"].results.find(r=>r.draw==="BR-111")){
+        DATA.bumper["Thiruvonam Bumper"].results.unshift({draw:"BR-111", date:"26 Sep 2026", result:"TL 360615"});
+      }
+    }
+  }catch(e){}
+  setTimeout(()=>{
+    if(typeof renderRecent==='function') renderRecent();
+    if(typeof selectYear==='function') selectYear(2026);
+    // Remove any awaiting banner
+    const awaitEl = document.getElementById('awaiting-msg');
+    if(awaitEl) awaitEl.remove();
+  }, 200);
+})();
+
+function renderRecent(){
+ const all=[...DATA["2026"]].sort((a,b)=> new Date(b.date)-new Date(a.date)).slice(0,12);
+ document.getElementById('recentGrid').innerHTML=all.map(r=>`
+  <div class="colour-card rounded-[20px] p-8 transition-all text-center" style="text-align:center; padding:28px 20px !important; border:2.5px solid #0a5c1e15;">
+   <p class="text-[13px] sm:text-[14px] text-gray-500 font-bold text-center" style="text-align:center;">${r.date_display||r.date}</p>
+   <div class="bg-gradient-to-r ${getColor(r.code)} text-white text-[9px] sm:text-[10px] px-3 py-1 rounded-full font-black mt-2 mx-auto block w-fit shadow-sm" style="margin-left:auto; margin-right:auto; display:table;">${r.code}</div>
+   <p class="mono text-[34px] sm:text-[40px] font-black mt-4 tracking-wide text-gray-900 text-center" style="text-align:center; width:100%; display:block;">${r.number_only||r.first}</p>
+  </div>
+ `).join('');
+}
+
+function showTab(n){
+ document.querySelectorAll('section[id^=sec-]').forEach(s=>s.classList.add('hidden'));
+ const target=document.getElementById('sec-'+n);
+ if(target) target.classList.remove('hidden');
+ // Reset all tabs to inactive - white bg, dark text, visible
+ document.querySelectorAll('[id^=tab-]').forEach(b=>{
+   b.style.backgroundColor=''; b.style.color=''; b.style.borderColor='';
+   b.className='px-5 py-2.5 bg-gray-50 border border-gray-200 rounded-full font-bold text-[13px] whitespace-nowrap text-gray-800';
+ });
+ const tabBtn=document.getElementById('tab-'+n);
+ if(tabBtn){
+   tabBtn.style.backgroundColor='#0a5c1e';
+   tabBtn.style.color='white';
+   tabBtn.style.borderColor='#0a5c1e';
+   tabBtn.className='px-5 py-2.5 rounded-full font-bold text-[13px] whitespace-nowrap shadow-md';
+ }
+ if(n==='monthly'){ selectYear(currentYear); }
+ if(n==='weekly') renderWeekly();
+ if(n==='yearly') selectYearlyYear(currentYearlyYear);
+ if(n==='bumper') renderBumperTabs();
+}
+
+function selectYear(y){
+ currentYear=y;
+ // Reset year buttons
+ document.querySelectorAll('button[id^="y-"]').forEach(b=>{
+   b.style.backgroundColor='white'; b.style.color='#111'; b.style.borderColor='#e5e7eb';
+   b.className='px-4 py-2 rounded-full border bg-white text-[12px] font-bold shadow-sm text-gray-900';
+ });
+ const el=document.getElementById('y-'+y);
+ if(el){
+   el.style.backgroundColor='#0a5c1e'; el.style.color='white'; el.style.borderColor='#0a5c1e';
+   el.className='px-4 py-2 rounded-full text-[12px] font-bold shadow-md';
+ }
+ const months=[...new Set((DATA[String(y)]||[]).map(d=>d.month))].sort((a,b)=>a-b);
+ if(months.length===0){ 
+   document.getElementById('monthBtns').innerHTML=''; 
+   document.getElementById('monthlyDetail').innerHTML='<div class="p-12 text-center text-gray-400 text-[12px]">No records for this year</div>'; 
+   return; 
+ }
+ // FIXED: Always show latest month, and present month (Sep) for current year
+ const presentM = new Date().getMonth()+1;
+ const presentY = new Date().getFullYear();
+ if(y===presentY && months.includes(presentM)){
+   currentMonth = presentM;
+ } else {
+   currentMonth = months[months.length-1];
+ }
+ const monthNames=["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+ document.getElementById('monthBtns').innerHTML=months.map(m=>{
+   const isActive = m===currentMonth;
+   const bg = isActive ? '#0a5c1e' : 'white';
+   const color = isActive ? 'white' : '#111';
+   const border = isActive ? '#0a5c1e' : '#e5e7eb';
+   return `<button onclick="selectMonth(${m})" id="m-${m}" style="background:${bg};color:${color};border-color:${border}" class="px-3.5 py-1.5 rounded-full border text-[11px] font-bold shadow-sm">${monthNames[m]}</button>`;
+ }).join('');
+ selectMonth(currentMonth);
+}
+
+function selectMonth(m){
+ currentMonth=m;
+ // Reset month buttons
+ document.querySelectorAll('button[id^="m-"]').forEach(b=>{
+   b.style.backgroundColor='white'; b.style.color='#111'; b.style.borderColor='#e5e7eb';
+   b.className='px-3.5 py-1.5 rounded-full border text-[11px] font-bold bg-white shadow-sm text-gray-900';
+ });
+ const btn=document.getElementById('m-'+m);
+ if(btn){
+   btn.style.backgroundColor='#0a5c1e'; btn.style.color='white'; btn.style.borderColor='#0a5c1e';
+   btn.className='px-3.5 py-1.5 rounded-full border text-[11px] font-bold shadow-md';
+ }
+ const filtered=(DATA[String(currentYear)]||[]).filter(d=>d.month===m).sort((a,b)=> new Date(a.date)-new Date(b.date)); // 1 to 28 ascending
+ let html=`<div class="overflow-x-auto"><table class="w-full text-[12px] border-collapse"><thead><tr class="bg-gray-100 border-b"><th class="p-3 text-left font-black text-gray-800">Date</th><th class="p-3 text-left font-black text-gray-800">Draw</th><th class="p-3 text-left font-black text-gray-800">Winning Number</th></tr></thead><tbody class="divide-y">`;
+ filtered.forEach(r=>{html+=`<tr class="hover:bg-gray-50"><td class="p-3 text-[11px] font-bold text-gray-700">${r.date_display||r.date}</td><td class="p-3"><span class="bg-gradient-to-r ${getColor(r.code)} text-white text-[10px] px-3 py-1 rounded-full font-black shadow-sm">${r.code}</span></td><td class="p-3 mono font-black text-[13px] text-gray-900">${r.first||r.number_only}</td></tr>`;});
+ html+=`</tbody></table></div>`;
+ if(filtered.length===0) html=`<div class="p-12 text-center text-gray-400 text-[12px]">No results for this month</div>`;
+ document.getElementById('monthlyDetail').innerHTML=html;
+}
+
+function selectYearlyYear(y){
+ currentYearlyYear=y;
+ document.querySelectorAll('button[id^="yy-"]').forEach(b=>{
+   b.style.backgroundColor='white'; b.style.color='#111'; b.style.borderColor='#e5e7eb';
+   b.className='px-3.5 py-1.5 rounded-full border bg-white text-[11px] font-bold shadow-sm text-gray-900';
+ });
+ const el=document.getElementById('yy-'+y);
+ if(el){
+   el.style.backgroundColor='#0a5c1e'; el.style.color='white'; el.style.borderColor='#0a5c1e';
+   el.className='px-3.5 py-1.5 rounded-full text-[11px] font-bold shadow-md';
+ }
+ renderYearly();
+}
+
+function renderWeekly(){
+ const data=DATA["2026"].slice().sort((a,b)=> new Date(a.date)-new Date(b.date)); // ASC
+ const byDate={};
+ data.forEach(d=>{ byDate[d.date]=d; });
+ const latestDate = data.length>0 ? new Date(data[data.length-1].date) : new Date();
+ const startOfYear = new Date(2026,0,1);
+ const firstSunday = new Date(startOfYear);
+ firstSunday.setDate(startOfYear.getDate() - startOfYear.getDay());
+ const lastSaturday = new Date(latestDate);
+ lastSaturday.setDate(latestDate.getDate() + (6 - lastSaturday.getDay()));
+ let weeks=[];
+ let current=new Date(firstSunday);
+ let weekCount=0;
+ while(current <= lastSaturday && weekCount < 52){
+  let week=[];
+  for(let j=0;j<7;j++){
+   let d=new Date(current);
+   d.setDate(current.getDate()+j);
+   let iso=toLocalISO(d);
+   let display=d.getDate()+'/'+(d.getMonth()+1);
+   week.push({iso, display, dateObj: new Date(d), data: byDate[iso]});
+  }
+  weeks.push(week);
+  current.setDate(current.getDate()+7);
+  weekCount++;
+ }
+ let html='';
+ weeks.forEach((week, idx)=>{
+  // Show all weeks from W1 to till now
+  html+=`<tr><td class="p-2.5 border-r bg-gradient-to-br from-gray-50 to-blue-50 font-black text-[11px]">W${idx+1}<br><span class="text-[8px] font-medium">${week[0].display}-${week[6].display}</span></td>`;
+  week.forEach(day=>{
+   if(day.data){
+    html+=`<td class="p-2 text-center border-r bg-gradient-to-br from-emerald-50/50 to-green-50/50"><div class="text-[9px] text-gray-600 font-bold">${day.display}</div><div class="bg-gradient-to-r ${getColor(day.data.code)} text-white text-[8px] px-1.5 py-0.5 rounded-full font-black mt-1 inline-block shadow-sm">${day.data.code}</div><div class="mono text-[10px] font-black mt-1">${day.data.number_only}</div></td>`;
+   } else {
+    const isFuture = day.dateObj > latestDate;
+    const isBeforeYear = day.dateObj < startOfYear;
+    if(isBeforeYear || isFuture){
+      html+=`<td class="p-2 text-center border-r bg-gray-50/30"><div class="text-[9px] text-gray-300">${day.display}</div></td>`;
+    } else {
+      html+=`<td class="p-2 text-center border-r bg-gray-50/30"><div class="text-[9px] text-gray-400 font-medium">${day.display}</div><div class="text-[8px] text-gray-300 mt-1">No Draw</div></td>`;
+    }
+   }
+  });
+  html+=`</tr>`;
+ });
+ document.getElementById('weeklyBody').innerHTML=html || '<tr><td colspan="8" class="p-12 text-center text-gray-400">No data</td></tr>';
+}
+
+
+
+function renderYearly(){
+ const year=currentYearlyYear;
+ const months=["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+ const monthColors=["","bg-gradient-to-r from-purple-600 to-purple-700","bg-gradient-to-r from-orange-600 to-orange-700","bg-gradient-to-r from-pink-600 to-rose-700","bg-gradient-to-r from-amber-600 to-yellow-700","bg-gradient-to-r from-emerald-600 to-teal-700","bg-gradient-to-r from-blue-600 to-cyan-700","bg-gradient-to-r from-red-600 to-red-700","bg-gradient-to-r from-violet-600 to-purple-700","bg-gradient-to-r from-indigo-600 to-indigo-700","bg-gradient-to-r from-teal-600 to-cyan-700","bg-gradient-to-r from-rose-600 to-pink-700","bg-gradient-to-r from-lime-600 to-green-700"];
+ let html=`<div class="overflow-auto"><table class="w-full text-[10px] border border-gray-300"><thead><tr><th class="p-3 bg-black text-white border text-left sticky left-0 font-black">Day</th>`;
+ for(let m=1;m<=12;m++){ html+=`<th class="p-2.5 ${monthColors[m]} text-white border font-black">${months[m]}</th>`; }
+ html+=`</tr></thead><tbody>`;
+ for(let day=1;day<=31;day++){
+  html+=`<tr><td class="p-2.5 font-black bg-gradient-to-br from-gray-100 to-gray-200 border text-center sticky left-0">${day}</td>`;
+  for(let m=1;m<=12;m++){
+   const found=DATA[String(year)].find(d=>d.month===m && new Date(d.date).getDate()===day);
+   if(found){ html+=`<td class="p-2 border text-center bg-gradient-to-br from-white to-emerald-50/50"><div class="text-[8px] font-black px-1.5 py-0.5 rounded-full bg-gradient-to-r ${getColor(found.code)} text-white inline-block shadow-sm">${found.code}</div><div class="mono text-[10px] font-black mt-1">${found.number_only}</div></td>`; }
+   else { html+=`<td class="p-2 border bg-gray-50/50"></td>`; }
+  }
+  html+=`</tr>`;
+ }
+ html+=`</tbody></table></div>`;
+ document.getElementById('yearlyTable').innerHTML=html;
+}
+
+function renderBumperTabs(){
+ const types=Object.keys(DATA.bumper);
+ document.getElementById('bumperTabs').innerHTML=types.map(t=>`<button onclick="selectBumper('${t}')" id="bt-${t}" style="background:white;color:#111;border-color:#e5e7eb" class="px-3.5 py-2 border rounded-full text-[11px] font-bold bg-white shadow-sm text-gray-900">${t}</button>`).join('');
+ if(types.length>0) selectBumper(types[0]);
+}
+
+function selectBumper(type){
+ document.querySelectorAll('button[id^="bt-"]').forEach(b=>{
+   b.style.backgroundColor='white'; b.style.color='#111'; b.style.borderColor='#e5e7eb';
+   b.className='px-3.5 py-2 border rounded-full text-[11px] font-bold bg-white shadow-sm text-gray-900';
+ });
+ const btn=document.getElementById('bt-'+type);
+ if(btn){
+   btn.style.backgroundColor='#0a5c1e'; btn.style.color='white'; btn.style.borderColor='#0a5c1e';
+   btn.className='px-3.5 py-2 border rounded-full text-[11px] font-bold shadow-md';
+ }
+ const results=DATA.bumper[type].results;
+ let html=`<table class="w-full text-[12px]"><thead class="bg-gradient-to-r from-amber-50 to-yellow-50 border-b"><tr><th class="p-3 text-left font-black">Draw</th><th class="p-3 font-black">Date</th><th class="p-3 text-left font-black">Winning Number</th></tr></thead><tbody class="divide-y">`;
+ results.forEach(r=>{html+=`<tr class="hover:bg-amber-50/50 transition"><td class="p-3 font-bold text-[11px]">${r.draw}</td><td class="p-3 text-gray-600 text-[11px] font-medium">${r.date}</td><td class="p-3 mono font-black text-[12px]">${r.result}</td></tr>`;});
+ html+=`</tbody></table>`;
+ document.getElementById('bumperDetail').innerHTML=html;
+}
+
+function updateTimer(){
+ const now=new Date(); 
+ const next=new Date(); 
+ next.setHours(15,7,0,0); 
+ if(now>=next) next.setDate(next.getDate()+1);
+ const diff=next-now; 
+ const h=Math.floor(diff/3600000); 
+ const m=Math.floor((diff%3600000)/60000); 
+ const s=Math.floor((diff%60000)/1000);
+ const hh=String(h).padStart(2,'0'), mm=String(m).padStart(2,'0'), ss=String(s).padStart(2,'0');
+ const timerEl=document.getElementById('timer'); 
+ if(timerEl) timerEl.innerText=`Next at 3:07 PM in ${hh}:${mm}:${ss}`;
+ // Desktop timer
+ const hEl=document.getElementById('h'); if(hEl) hEl.innerText=hh;
+ const mEl=document.getElementById('m'); if(mEl) mEl.innerText=mm;
+ const sEl=document.getElementById('s'); if(sEl) sEl.innerText=ss;
+ // Mobile timer - fixed IDs
+ const thEl=document.getElementById('th-mob'); if(thEl) thEl.innerText=hh;
+ const tmEl=document.getElementById('tm-mob'); if(tmEl) tmEl.innerText=mm;
+ const tsEl=document.getElementById('ts-mob'); if(tsEl) tsEl.innerText=ss;
+}
+
+renderRecent(); updateTimer(); setInterval(updateTimer,1000);
+
+</script>
+
+<script>
+
+// === VISITOR COUNTER - Daily, Monthly, Yearly with auto yearly reset ===
+(function(){
+  function getISTDate(){
+    var now = new Date();
+    var utc = now.getTime() + (now.getTimezoneOffset()*60000);
+    var ist = new Date(utc + (5.5*60*60000));
+    return ist;
+  }
+  function formatDate(d){
+    var y=d.getFullYear();
+    var m=String(d.getMonth()+1).padStart(2,'0');
+    var day=String(d.getDate()).padStart(2,'0');
+    return { y: y, m: m, d: day, ymd: y+'-'+m+'-'+day, ym: y+'-'+m };
+  }
+  try{
+    var ist = getISTDate();
+    var fmt = formatDate(ist);
+    
+    var stored = JSON.parse(localStorage.getItem('kl_visitors') || '{}');
+    
+    // Initialize if first time
+    if(!stored.daily) stored.daily = { key: fmt.ymd, count: 0 };
+    if(!stored.monthly) stored.monthly = { key: fmt.ym, count: 0 };
+    if(!stored.yearly) stored.yearly = { key: String(fmt.y), count: 0 };
+    if(!stored.total) stored.total = 0;
+    if(!stored.lastVisit) stored.lastVisit = null;
+    
+    // Check if new day (IST)
+    if(stored.daily.key !== fmt.ymd){
+      stored.daily = { key: fmt.ymd, count: 0 };
+    }
+    // Check if new month
+    if(stored.monthly.key !== fmt.ym){
+      stored.monthly = { key: fmt.ym, count: 0 };
+    }
+    // Check if new year - AUTO RESET yearly logic
+    if(stored.yearly.key !== String(fmt.y)){
+      // Archive old year and reset
+      var oldYear = stored.yearly.key;
+      if(oldYear){
+        var archive = JSON.parse(localStorage.getItem('kl_archive') || '{}');
+        archive[oldYear] = stored.yearly.count;
+        localStorage.setItem('kl_archive', JSON.stringify(archive));
+      }
+      stored.yearly = { key: String(fmt.y), count: 0 };
+      // Monthly also resets on new year (already handled by month check, but ensure)
+      stored.monthly = { key: fmt.ym, count: 0 };
+      stored.daily = { key: fmt.ymd, count: 0 };
+    }
+    
+    // Count only once per session (30 min gap) to avoid refresh spam
+    var last = stored.lastVisit ? new Date(stored.lastVisit) : null;
+    var shouldCount = true;
+    if(last){
+      var diff = new Date() - last;
+      if(diff < 30*60*1000){ // 30 minutes
+        shouldCount = false;
+      }
+    }
+    
+    if(shouldCount){
+      stored.daily.count++;
+      stored.monthly.count++;
+      stored.yearly.count++;
+      stored.total++;
+      stored.lastVisit = new Date().toISOString();
+      localStorage.setItem('kl_visitors', JSON.stringify(stored));
+    }
+    
+    // Display
+    var dEl = document.getElementById('v-daily');
+    var mEl = document.getElementById('v-monthly');
+    var yEl = document.getElementById('v-yearly');
+    var tEl = document.getElementById('v-total');
+    if(dEl) dEl.textContent = stored.daily.count.toLocaleString('en-IN');
+    if(mEl) mEl.textContent = stored.monthly.count.toLocaleString('en-IN');
+    if(yEl) yEl.textContent = stored.yearly.count.toLocaleString('en-IN');
+    if(tEl) tEl.textContent = stored.total.toLocaleString('en-IN');
+    
+    // Also update footer if exists
+    var footerDaily = document.getElementById('footer-visitors');
+    if(footerDaily) footerDaily.textContent = stored.daily.count;
+    
+  }catch(e){ console.log('visitor counter error', e); }
+})();
+
+// Fix for Cloudflare Workers - remove domain lock, make IST timer correct
+(function(){
+  // Override timer to use IST
+  function updateISTTimer(){
+    var now = new Date();
+    var istOffset = 5.5*60;
+    var utc = now.getTime() + (now.getTimezoneOffset()*60000);
+    var ist = new Date(utc + (istOffset*60000));
+    var hrs = ist.getHours();
+    var isTomorrow = hrs >= 15;
+    var txt = isTomorrow ? 'Tomorrow' : 'Today';
+    var label = document.getElementById('nextDrawLabel');
+    if(label) label.textContent = txt;
+    document.querySelectorAll('.nextDrawLabel2').forEach(function(el){ el.textContent = txt; });
+  }
+  updateISTTimer();
+  setInterval(updateISTTimer, 60000);
+})();
+</script>
+
+
+
+
+
+<script>
 // UPDATE: Add upto yesterday (27-09-2026) and Thiruvonam Bumper BR-111
 (function(){
   // Daily results
