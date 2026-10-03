@@ -1092,88 +1092,28 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
 
 
 
-<script>
-// UPDATE: Add upto yesterday (27-09-2026) and Thiruvonam Bumper BR-111
-(function(){
-  // Daily results
-  if(!DATA["2026"]) DATA["2026"]=[];
-  const dailyMissing = [
-    {date:"2026-09-26", date_display:"26/09/2026", month:9, year:2026, code:"BR-111", first:"TL 360615", number_only:"360615"},
-    {date:"2026-09-27", date_display:"27/09/2026", month:9, year:2026, code:"SM-74", first:"MS 495441", number_only:"495441"}
-  ];
-  dailyMissing.forEach(m=>{
-    if(!DATA["2026"].find(r=>r.date===m.date)){
-      DATA["2026"].push(m);
-    }
-  });
-  // Sort 2026 by date descending for recent
-  DATA["2026"].sort((a,b)=> new Date(b.date) - new Date(a.date));
-
-  // Bumper results - Thiruvonam Bumper BR-111
-  try{
-    if(DATA.bumper && DATA.bumper["Thiruvonam Bumper"]){
-      const bumperArr = DATA.bumper["Thiruvonam Bumper"].results;
-      if(!bumperArr.find(r=>r.draw==="BR-111")){
-        bumperArr.unshift({draw:"BR-111", date:"26 Sep 2026", result:"TL 360615"});
-      }
-    }
-  }catch(e){}
-
-  // Persist
-  try{
-    localStorage.setItem('kl_auto_sync_v4', JSON.stringify(DATA));
-  }catch(e){}
-
-  // Re-render
-  setTimeout(()=>{
-    if(typeof renderRecent==='function') renderRecent();
-    if(typeof renderBumperTabs==='function') renderBumperTabs();
-    // If bumper tab currently shows Thiruvonam, refresh detail
-    if(typeof selectBumper==='function'){
-      const active = document.querySelector('button[id^="bt-"]')?.id?.replace('bt-','');
-      if(active) selectBumper(active);
-      else selectBumper('Thiruvonam Bumper');
-    }
-    // Show awaiting for today 28th
-    const grid = document.getElementById('recentGrid');
-    if(grid && !document.getElementById('awaiting-msg')){
-      const ist = (()=>{
-        const now=new Date();
-        const utc=now.getTime()+(now.getTimezoneOffset()*60000);
-        return new Date(utc+(5.5*60*60000));
-      })();
-      const todayISO = `${ist.getFullYear()}-${String(ist.getMonth()+1).padStart(2,'0')}-${String(ist.getDate()).padStart(2,'0')}`;
-      const hasToday = DATA["2026"].find(r=>r.date===todayISO);
-      if(!hasToday){
-        const awaiting = document.createElement('div');
-        awaiting.id='awaiting-msg';
-        awaiting.className='col-span-full bg-amber-50 border-2 border-amber-200 rounded-[16px] p-4 text-center mb-4';
-        awaiting.innerHTML=`<p class="font-black text-[12px] text-amber-800">Today 28/09/2026 BT-73 result not announced yet</p><p class="text-[11px] text-gray-600 mt-1">Will update at 3:07 PM IST</p>`;
-        grid.prepend(awaiting);
-      }
-    }
-  }, 600);
-})();
-</script>
-
-
 
 <script>
-// FIXED RECENT ORDER: Latest first 28/09 -> 27/09 -> 26/09
+// CLEAN DATA: Fixed order and added 01/10/2026 KN-643, removed 28/09 yellow box
 (function(){
-  const entries = [
+  const correctEntries = [
+    {date:"2026-10-01", date_display:"01/10/2026", month:10, year:2026, code:"KN-643", first:"PH 901174", number_only:"901174"},
+    {date:"2026-09-30", date_display:"30/09/2026", month:9, year:2026, code:"DL-71", first:"DM 925476", number_only:"925476"},
+    {date:"2026-09-29", date_display:"29/09/2026", month:9, year:2026, code:"SS-539", first:"SW 301775", number_only:"301775"},
     {date:"2026-09-28", date_display:"28/09/2026", month:9, year:2026, code:"BT-73", first:"BB 814615", number_only:"814615"},
     {date:"2026-09-27", date_display:"27/09/2026", month:9, year:2026, code:"SM-74", first:"MS 495441", number_only:"495441"},
     {date:"2026-09-26", date_display:"26/09/2026", month:9, year:2026, code:"BR-111", first:"TL 360615", number_only:"360615"},
     {date:"2026-09-25", date_display:"25/09/2026", month:9, year:2026, code:"SK-71", first:"RA 494226", number_only:"494226"}
   ];
   if(!DATA["2026"]) DATA["2026"]=[];
-  // Remove existing same dates
-  DATA["2026"] = DATA["2026"].filter(x=> !["2026-09-28","2026-09-27","2026-09-26","2026-09-25"].includes(x.date));
-  // Add new
-  DATA["2026"] = [...entries, ...DATA["2026"]];
-  // Sort DESC - latest first
+  // Remove any existing entries for these dates to avoid duplicates
+  const datesToReplace = correctEntries.map(e=>e.date);
+  DATA["2026"] = DATA["2026"].filter(x=> !datesToReplace.includes(x.date));
+  // Add correct entries
+  DATA["2026"] = [...correctEntries, ...DATA["2026"]];
+  // Sort DESC latest first
   DATA["2026"].sort((a,b)=> new Date(b.date) - new Date(a.date));
+  // Update bumper if needed
   try{
     if(DATA.bumper && DATA.bumper["Thiruvonam Bumper"]){
       if(!DATA.bumper["Thiruvonam Bumper"].results.find(r=>r.draw==="BR-111")){
@@ -1181,10 +1121,16 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
       }
     }
   }catch(e){}
+  // Remove any yellow awaiting box if exists (from old localStorage or DOM)
+  const awaitEl = document.getElementById('awaiting-msg');
+  if(awaitEl) awaitEl.remove();
+  // Clear old localStorage that had awaiting logic
+  try{ localStorage.removeItem('kl_auto_sync_v4'); localStorage.setItem('kl_auto_sync_v4', JSON.stringify(DATA)); }catch(e){}
   setTimeout(()=>{
     if(typeof renderRecent==='function') renderRecent();
-    if(typeof selectYear==='function') selectYear(new Date().getFullYear());
-  }, 100);
+    if(typeof selectYear==='function') selectYear(2026);
+    if(typeof renderWeekly==='function') renderWeekly();
+  }, 200);
 })();
 
 function renderRecent(){
