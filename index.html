@@ -80,7 +80,7 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
 <!-- YouTube auto-sync (hidden, no banner) -->
 <script>
-// AUTO SYNC AT 3:07 PM IST - NO IFRAME
+// AUTO SYNC AT 3:07 PM IST - FIXED VERSION (works without API key)
 (function(){
   const STORAGE_KEY = 'kl_auto_sync_v4';
   function getIST(){
@@ -88,10 +88,12 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
     const utc=now.getTime()+(now.getTimezoneOffset()*60000);
     return new Date(utc+(5.5*60*60000));
   }
+  window.getIST = getIST; // expose for other scripts
+
   function addResultToData(newResult){
     try{
       const dateObj = new Date(newResult.date);
-      if(isNaN(dateObj)) return;
+      if(isNaN(dateObj)) return false;
       const year = String(dateObj.getFullYear());
       const month = dateObj.getMonth()+1;
       const date_display = String(dateObj.getDate()).padStart(2,'0')+'/'+String(month).padStart(2,'0')+'/'+year;
@@ -101,73 +103,130 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
         month: month,
         year: parseInt(year),
         code: newResult.code || 'AUTO',
-        first: newResult.number,
-        number_only: newResult.number.replace(/[^0-9]/g,'').slice(-6)
+        first: newResult.number || newResult.first,
+        number_only: (newResult.number_only || (newResult.number||'').replace(/[^0-9]/g,'').slice(-6) || newResult.first||'').slice(-6)
       };
       if(!DATA[year]) DATA[year]=[];
       const exists = DATA[year].find(r=>r.date===entry.date);
-      if(exists) return;
-      DATA[year].unshift(entry);
+      if(exists){
+        // update if different
+        if(exists.first !== entry.first){
+          Object.assign(exists, entry);
+        } else {
+          return false;
+        }
+      } else {
+        DATA[year].unshift(entry);
+      }
+      DATA[year].sort((a,b)=> new Date(b.date) - new Date(a.date));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(DATA));
       if(typeof renderRecent === 'function') renderRecent();
-      const el=document.getElementById('autoSyncStatus');
-      if(el) el.innerText = 'ADDED: '+entry.first;
-    }catch(e){}
+      if(typeof selectYear === 'function') selectYear(parseInt(year));
+      console.log('Auto added:', entry);
+      return true;
+    }catch(e){ console.error(e); return false; }
   }
-  window.syncYouTubeNow = async function(){
-    const statusEl = document.getElementById('autoSyncStatus');
-    if(statusEl) statusEl.innerText = 'Syncing...';
-    try{
-      const apiKey = localStorage.getItem('kl_yt_api_key');
-      if(!apiKey){
-        if(statusEl) statusEl.innerText = '';
-        return;
-      }
-      const chRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&q=keralalotteryliveresult&type=channel&key=${apiKey}`).then(r=>r.json());
-      const channelId = chRes.items?.[0]?.id?.channelId;
-      const vidRes = await fetch(`https://www.googleapis.com/youtube/v3/search?part=snippet&channelId=${channelId}&order=date&maxResults=1&key=${apiKey}`).then(r=>r.json());
-      const item = vidRes.items?.[0];
-      const title = item.snippet.title;
-      const codeMatch = title.match(/([A-Z]{1,3}[- ]?\d{2,4})/i);
-      const numMatch = title.match(/([A-Z]{1,3}\s?\d{6})/);
-      const dateMatch = title.match(/(\d{2}[.-]\d{2}[.-]\d{4})/);
-      const ist = getIST();
-      const todayISO = ist.toISOString().split('T')[0];
-      const result = {
-        date: todayISO,
-        code: codeMatch ? codeMatch[0].toUpperCase() : 'LIVE',
-        number: numMatch ? numMatch[0].toUpperCase() : title.substring(0,20)
-      };
-      if(dateMatch){
-        const parts = dateMatch[0].split(/[.-]/);
-        result.date = `${parts[2]}-${parts[1]}-${parts[0]}`;
-      }
-      addResultToData(result);
-      if(statusEl) statusEl.innerText = 'Synced: '+result.code;
-    }catch(e){
-      if(statusEl) statusEl.innerText = '';
-    }
-  };
-  setInterval(()=>{
-    const ist = getIST();
-    if(ist.getHours()===15 && ist.getMinutes()===7 && ist.getSeconds()===0){
-      const last = localStorage.getItem('kl_last_sync_date');
-      const today = `${ist.getFullYear()}-${ist.getMonth()+1}-${ist.getDate()}`;
-      if(last!==today){
-        window.syncYouTubeNow();
-        localStorage.setItem('kl_last_sync_date', today);
-      }
-    }
-  }, 1000);
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if(saved){
-    try{
+  window.addKeralaResult = addResultToData; // admin can call from console
+
+  // Load saved data
+  try{
+    const saved = localStorage.getItem(STORAGE_KEY);
+    if(saved){
       const parsed = JSON.parse(saved);
       Object.keys(parsed).forEach(y=>{
-        if(!DATA[y] || parsed[y].length>DATA[y].length) DATA[y]=parsed[y];
+        if(y==='bumper') {
+          // merge bumper
+          if(DATA.bumper && parsed.bumper){
+            Object.keys(parsed.bumper).forEach(bk=>{
+              if(DATA.bumper[bk]) {
+                // merge results avoiding dup
+                const existingDraws = new Set(DATA.bumper[bk].results.map(r=>r.draw));
+                parsed.bumper[bk].results.forEach(r=>{
+                  if(!existingDraws.has(r.draw)) DATA.bumper[bk].results.unshift(r);
+                });
+              }
+            });
+          }
+        } else if(!DATA[y] || parsed[y].length>DATA[y].length){
+          // Only use saved if it has more entries
+          // But merge to keep latest correctEntries
+          const existingDates = new Set((DATA[y]||[]).map(r=>r.date));
+          parsed[y].forEach(r=>{
+            if(!existingDates.has(r.date)){
+              DATA[y].push(r);
+            }
+          });
+        }
       });
-    }catch(e){}
+      DATA["2026"] && DATA["2026"].sort((a,b)=> new Date(b.date) - new Date(a.date));
+    }
+  }catch(e){}
+
+  // Auto update checker - runs every 60 seconds after 3:07 PM IST
+  function checkAndShowAwaiting(){
+    const ist = getIST();
+    const todayISO = ist.getFullYear()+'-'+String(ist.getMonth()+1).padStart(2,'0')+'-'+String(ist.getDate()).padStart(2,'0');
+    const todayDisplay = String(ist.getDate()).padStart(2,'0')+'/'+String(ist.getMonth()+1).padStart(2,'0')+'/'+ist.getFullYear();
+    const hasToday = (DATA["2026"]||[]).find(r=>r.date===todayISO);
+    
+    // Remove awaiting if result exists
+    if(hasToday){
+      const el = document.getElementById('auto-awaiting');
+      if(el) el.remove();
+      return;
+    }
+
+    // If after 3:07 PM IST and no result, show awaiting and try to auto-fetch
+    if(ist.getHours()>15 || (ist.getHours()===15 && ist.getMinutes()>=7)){
+      const grid = document.getElementById('recentGrid');
+      if(grid && !document.getElementById('auto-awaiting')){
+        const div = document.createElement('div');
+        div.id='auto-awaiting';
+        div.className='col-span-full bg-amber-50 border-2 border-amber-200 rounded-[16px] p-4 text-center animate-pulse';
+        div.innerHTML = `<p class="font-black text-[12px] text-amber-800">Today ${todayDisplay} result awaited - Will update at 3:07 PM IST</p><p class="text-[11px] text-gray-600 mt-1">Auto refreshing every 60s... Next draw in progress</p><p class="text-[10px] text-gray-400 mt-1">Last checked: ${ist.toLocaleTimeString('en-IN')}</p>`;
+        grid.prepend(div);
+      }
+    }
   }
+
+  // Run checker every 60s
+  setInterval(checkAndShowAwaiting, 60000);
+  setTimeout(checkAndShowAwaiting, 2000);
+
+  // Also poll localStorage for external admin updates (if you add result in another tab)
+  setInterval(()=>{
+    try{
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if(saved){
+        const parsed = JSON.parse(saved);
+        if(parsed["2026"]){
+          const currentLen = (DATA["2026"]||[]).length;
+          const savedLen = parsed["2026"].length;
+          // If saved has newer date that we don't have
+          const hasNew = parsed["2026"].some(sr=> !(DATA["2026"]||[]).some(cr=>cr.date===sr.date));
+          if(hasNew || savedLen>currentLen){
+            // merge
+            const existing = new Set((DATA["2026"]||[]).map(r=>r.date));
+            parsed["2026"].forEach(r=>{
+              if(!existing.has(r.date)){
+                DATA["2026"].push(r);
+              }
+            });
+            DATA["2026"].sort((a,b)=> new Date(b.date) - new Date(a.date));
+            if(typeof renderRecent === 'function') renderRecent();
+            checkAndShowAwaiting();
+          }
+        }
+      }
+    }catch(e){}
+  }, 5000);
+
+  // Expose manual admin function
+  window.klAdminAdd = function(dateStr, code, number){
+    // dateStr: YYYY-MM-DD
+    return addResultToData({date: dateStr, code: code, number: number});
+  };
+
 })();
 </script>
 
@@ -180,6 +239,32 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
 </div>
 </section>
+
+<!-- MOBILE VISITOR COUNTER (visible only on entrance) -->
+<div id="visitor-widget-mobile" class="lg:hidden bg-white rounded-[16px] border p-5 shadow-sm mt-6">
+<h4 class="font-black text-[12px] uppercase tracking-widest flex items-center gap-2">
+<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Visitors Count
+</h4>
+<div class="mt-4 grid grid-cols-3 gap-2">
+<div class="py-2.5 px-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
+<div class="text-[11px] font-bold text-gray-600">Today</div>
+<span id="v-daily-m" class="font-black text-[13px] text-[#0a5c1e] mono">0</span>
+</div>
+<div class="py-2.5 px-3 bg-blue-50 rounded-xl border border-blue-100 text-center">
+<div class="text-[11px] font-bold text-gray-600">Month</div>
+<span id="v-monthly-m" class="font-black text-[13px] text-blue-700 mono">0</span>
+</div>
+<div class="py-2.5 px-3 bg-amber-50 rounded-xl border border-amber-100 text-center">
+<div class="text-[11px] font-bold text-gray-600">Year</div>
+<span id="v-yearly-m" class="font-black text-[13px] text-amber-700 mono">0</span>
+</div>
+</div>
+<div class="flex justify-between items-center py-2 border-t mt-3">
+<span class="text-[11px] text-gray-500 font-medium">Total Visits</span>
+<span id="v-total-m" class="font-black text-[12px] mono">0</span>
+</div>
+</div>
+
 
 <section id="sec-monthly" class="hidden bg-white rounded-[20px] border shadow-sm overflow-hidden">
 <div class="p-6 sm:p-7 border-b bg-gradient-to-r from-blue-50 to-indigo-50">
@@ -248,7 +333,7 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 
 </div>
 
-<aside class="space-y-4 hidden lg:block">
+<aside class="space-y-4 block">
 
 <div class="bg-white rounded-[16px] border p-5">
 <h4 class="font-black text-[12px] uppercase tracking-widest">Information</h4>
@@ -258,8 +343,8 @@ button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 </div>
 </div>
 
-<!-- VISITOR COUNTER WIDGET -->
-<div class="bg-white rounded-[16px] border p-5 shadow-sm">
+<!-- VISITOR COUNTER WIDGET - ENTRANCE ONLY -->
+<div id="visitor-widget-desktop" class="bg-white rounded-[16px] border p-5 shadow-sm">
 <h4 class="font-black text-[12px] uppercase tracking-widest flex items-center gap-2">
 <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> Visitors Count
 </h4>
@@ -420,6 +505,12 @@ function showTab(n){
  if(n==='weekly') renderWeekly();
  if(n==='yearly') selectYearlyYear(currentYearlyYear);
  if(n==='bumper') renderBumperTabs();
+ // --- ENTRANCE PAGE ONLY: show visitor counter only on recent ---
+ var isEntrance = (n==='recent');
+ var dW = document.getElementById('visitor-widget-desktop');
+ var mW = document.getElementById('visitor-widget-mobile');
+ if(dW) dW.style.display = isEntrance ? 'block' : 'none';
+ if(mW) mW.style.display = isEntrance ? 'block' : 'none';
 }
 
 function selectYear(y){
@@ -587,11 +678,12 @@ function selectBumper(type){
 }
 
 function updateTimer(){
- const now=new Date(); 
- const next=new Date(); 
+ const nowIST = (window.getIST ? window.getIST() : (function(){ const n=new Date(); const utc=n.getTime()+(n.getTimezoneOffset()*60000); return new Date(utc+(5.5*60*60000)); })());
+ const next=new Date(nowIST); 
  next.setHours(15,7,0,0); 
- if(now>=next) next.setDate(next.getDate()+1);
- const diff=next-now; 
+ next.setMilliseconds(0);
+ if(nowIST>=next) next.setDate(next.getDate()+1);
+ const diff=next-nowIST; 
  const h=Math.floor(diff/3600000); 
  const m=Math.floor((diff%3600000)/60000); 
  const s=Math.floor((diff%60000)/1000);
@@ -664,7 +756,7 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
       stored.daily = { key: fmt.ymd, count: 0 };
     }
     
-    // Count only once per session (30 min gap) to avoid refresh spam
+    // Count only once per session AND only on entrance page (recent)
     var last = stored.lastVisit ? new Date(stored.lastVisit) : null;
     var shouldCount = true;
     if(last){
@@ -673,8 +765,11 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
         shouldCount = false;
       }
     }
+    // Check if current view is entrance page (sec-recent visible)
+    var secRecent = document.getElementById('sec-recent');
+    var isEntrancePage = secRecent ? !secRecent.classList.contains('hidden') : true;
     
-    if(shouldCount){
+    if(shouldCount && isEntrancePage){
       stored.daily.count++;
       stored.monthly.count++;
       stored.yearly.count++;
@@ -692,6 +787,16 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
     if(mEl) mEl.textContent = stored.monthly.count.toLocaleString('en-IN');
     if(yEl) yEl.textContent = stored.yearly.count.toLocaleString('en-IN');
     if(tEl) tEl.textContent = stored.total.toLocaleString('en-IN');
+
+    // Mobile duplicates
+    var dElM = document.getElementById('v-daily-m');
+    var mElM = document.getElementById('v-monthly-m');
+    var yElM = document.getElementById('v-yearly-m');
+    var tElM = document.getElementById('v-total-m');
+    if(dElM) dElM.textContent = stored.daily.count.toLocaleString('en-IN');
+    if(mElM) mElM.textContent = stored.monthly.count.toLocaleString('en-IN');
+    if(yElM) yElM.textContent = stored.yearly.count.toLocaleString('en-IN');
+    if(tElM) tElM.textContent = stored.total.toLocaleString('en-IN');
     
     // Also update footer if exists
     var footerDaily = document.getElementById('footer-visitors');
@@ -788,6 +893,12 @@ function showTab(n){
  if(n==='weekly') renderWeekly();
  if(n==='yearly') selectYearlyYear(currentYearlyYear);
  if(n==='bumper') renderBumperTabs();
+ // --- ENTRANCE PAGE ONLY: show visitor counter only on recent ---
+ var isEntrance = (n==='recent');
+ var dW = document.getElementById('visitor-widget-desktop');
+ var mW = document.getElementById('visitor-widget-mobile');
+ if(dW) dW.style.display = isEntrance ? 'block' : 'none';
+ if(mW) mW.style.display = isEntrance ? 'block' : 'none';
 }
 
 function selectYear(y){
@@ -955,11 +1066,12 @@ function selectBumper(type){
 }
 
 function updateTimer(){
- const now=new Date(); 
- const next=new Date(); 
+ const nowIST = (window.getIST ? window.getIST() : (function(){ const n=new Date(); const utc=n.getTime()+(n.getTimezoneOffset()*60000); return new Date(utc+(5.5*60*60000)); })());
+ const next=new Date(nowIST); 
  next.setHours(15,7,0,0); 
- if(now>=next) next.setDate(next.getDate()+1);
- const diff=next-now; 
+ next.setMilliseconds(0);
+ if(nowIST>=next) next.setDate(next.getDate()+1);
+ const diff=next-nowIST; 
  const h=Math.floor(diff/3600000); 
  const m=Math.floor((diff%3600000)/60000); 
  const s=Math.floor((diff%60000)/1000);
@@ -1032,7 +1144,7 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
       stored.daily = { key: fmt.ymd, count: 0 };
     }
     
-    // Count only once per session (30 min gap) to avoid refresh spam
+    // Count only once per session AND only on entrance page (recent)
     var last = stored.lastVisit ? new Date(stored.lastVisit) : null;
     var shouldCount = true;
     if(last){
@@ -1041,8 +1153,11 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
         shouldCount = false;
       }
     }
+    // Check if current view is entrance page (sec-recent visible)
+    var secRecent = document.getElementById('sec-recent');
+    var isEntrancePage = secRecent ? !secRecent.classList.contains('hidden') : true;
     
-    if(shouldCount){
+    if(shouldCount && isEntrancePage){
       stored.daily.count++;
       stored.monthly.count++;
       stored.yearly.count++;
@@ -1060,6 +1175,16 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
     if(mEl) mEl.textContent = stored.monthly.count.toLocaleString('en-IN');
     if(yEl) yEl.textContent = stored.yearly.count.toLocaleString('en-IN');
     if(tEl) tEl.textContent = stored.total.toLocaleString('en-IN');
+
+    // Mobile duplicates
+    var dElM = document.getElementById('v-daily-m');
+    var mElM = document.getElementById('v-monthly-m');
+    var yElM = document.getElementById('v-yearly-m');
+    var tElM = document.getElementById('v-total-m');
+    if(dElM) dElM.textContent = stored.daily.count.toLocaleString('en-IN');
+    if(mElM) mElM.textContent = stored.monthly.count.toLocaleString('en-IN');
+    if(yElM) yElM.textContent = stored.yearly.count.toLocaleString('en-IN');
+    if(tElM) tElM.textContent = stored.total.toLocaleString('en-IN');
     
     // Also update footer if exists
     var footerDaily = document.getElementById('footer-visitors');
