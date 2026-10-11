@@ -1221,7 +1221,17 @@ renderRecent(); updateTimer(); setInterval(updateTimer,1000);
 <script>
 // CLEAN DATA: Updated with 08/10/2026 KN-644 and 09/10/2026 SK-72 from screenshots
 (function(){
-  const correctEntries = [
+  
+// KR-771 Full Result 10.10.2026
+// 1st: KY 383414 (1 Crore)
+// 2nd: KW 848084 (25 Lakhs)
+// 3rd: KV 573582 (10 Lakhs)
+// 4th: 0114, 2334, 2521, 2882, 3311, 4591, 4894, 5874, 6426, 6502, 6558, 7743, 8092, 8374, 8512, 8604, 8997, 9356, 9578 (5000/-)
+// 5th: 0410, 0516, 1879, 3029, 6122, 6306 (2000/-)
+// Conso: 5000/- for remaining series
+
+    const correctEntries = [
+    {date:"2026-10-10", date_display:"10/10/2026", month:10, year:2026, code:"KR-771", first:"KY 383414", number_only:"383414"},
     {date:"2026-10-09", date_display:"09/10/2026", month:10, year:2026, code:"SK-72", first:"RW 749995", number_only:"749995"},
     {date:"2026-10-08", date_display:"08/10/2026", month:10, year:2026, code:"KN-644", first:"PV 975247", number_only:"975247"},
     {date:"2026-10-07", date_display:"07/10/2026", month:10, year:2026, code:"DL-72", first:"DR 895405", number_only:"895405"},
